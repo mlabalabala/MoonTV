@@ -38,6 +38,7 @@
 
 - [技术栈](#技术栈)
 - [部署](#部署)
+- [Compose 最佳实践](#Compose最佳实践)
 - [环境变量](#环境变量)
 - [配置说明](#配置说明)
 - [Roadmap](#roadmap)
@@ -101,10 +102,14 @@ docker run -d --name moontv -p 3000:3000 ghcr.io/senshinya/moontv:latest
 
 访问 `http://服务器 IP:3000` 即可。
 
-#### 2. docker-compose 示例
+
+## Docker Compose 最佳实践
+
+若你使用 docker compose 部署，以下是一些 compose 示例
+
+### local storage 版本
 
 ```yaml
-version: '3.9'
 services:
   moontv:
     image: ghcr.io/senshinya/moontv:latest
@@ -119,19 +124,42 @@ services:
     #   - ./config.json:/app/config.json:ro
 ```
 
-执行：
+### Redis 版本（推荐，多账户数据隔离，跨设备同步）
 
-```bash
-docker compose up -d
+```yaml
+services:
+  moontv-core:
+    image: ghcr.io/senshinya/moontv:latest
+    container_name: moontv
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NEXT_PUBLIC_STORAGE_TYPE=redis
+      - REDIS_URL=redis://moontv-redis:6379
+      - NEXT_PUBLIC_ENABLE_REGISTER=true # 首次部署请设置该变量，注册初始账户后可关闭
+    networks:
+      - moontv-network
+    depends_on:
+      - moontv-redis
+    # 如需自定义配置，可挂载文件
+    # volumes:
+    #   - ./config.json:/app/config.json:ro
+  moontv-redis:
+    image: redis
+    container_name: moontv-redis
+    restart: unless-stopped
+    networks:
+      - moontv-network
+    # 如需持久化
+    # volumes:
+    #   - ./data:/data
+networks:
+  moontv-network:
+    driver: bridge
 ```
 
-随后同样访问 `http://服务器 IP:3000`。
-
-### **请勿使用 Pull Bot 自动同步**
-
-Pull Bot 会反复触发无效的 PR 和垃圾邮件，严重干扰项目维护。作者可能会直接拉黑所有 Pull Bot 自动发起的同步请求的仓库所有者。
-
-**推荐做法：**
+## 自动同步最近更改
 
 建议在 fork 的仓库中启用本仓库自带的 GitHub Actions 自动同步功能（见 `.github/workflows/sync.yml`）。
 
@@ -139,13 +167,16 @@ Pull Bot 会反复触发无效的 PR 和垃圾邮件，严重干扰项目维护�
 
 ## 环境变量
 
-| 变量                                | 说明                               | 可选值                                                           | 默认值       |
-| ----------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------ |
-| PASSWORD                            | 实例访问密码，留空则不启用密码保护 | 任意字符串                                                       | （空）       |
-| SITE_NAME                           | 站点名称                           | 任意字符串                                                       | MoonTV       |
-| NEXT_PUBLIC_STORAGE_TYPE            | 播放记录/收藏的存储方式            | localstorage（本地浏览器存储）、database（后端数据库，暂不支持） | localstorage |
-| NEXT_PUBLIC_SEARCH_MAX_PAGE         | 搜索接口可拉取的最大页数           | 1-50                                                             | 5            |
-| NEXT_PUBLIC_AGGREGATE_SEARCH_RESULT | 搜索结果默认是否按标题和年份聚合   | true / false                                                     | true         |
+| 变量                                | 说明                                                        | 可选值                                                  | 默认值                                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| PASSWORD                            | 实例访问密码，留空则不启用密码保护                          | 任意字符串                                              | （空）                                                                                                                     |
+| SITE_NAME                           | 站点名称                                                    | 任意字符串                                              | MoonTV                                                                                                                     |
+| ANNOUNCEMENT                        | 站点公告                                                    | 任意字符串                                              | 本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。 |
+| NEXT_PUBLIC_STORAGE_TYPE            | 播放记录/收藏的存储方式                                     | localstorage（本地浏览器存储）、redis（仅 docker 支持） | localstorage                                                                                                               |
+| REDIS_URL                           | redis 连接 url，若 NEXT_PUBLIC_STORAGE_TYPE 为 redis 则必填 | 连接 url                                                | 空                                                                                                                         |
+| NEXT_PUBLIC_ENABLE_REGISTER         | 是否开放注册，建议首次运行时设置 true，注册初始账号后可关闭 | true / false                                            | false                                                                                                                      |
+| NEXT_PUBLIC_SEARCH_MAX_PAGE         | 搜索接口可拉取的最大页数                                    | 1-50                                                    | 5                                                                                                                          |
+| NEXT_PUBLIC_AGGREGATE_SEARCH_RESULT | 搜索结果默认是否按标题和年份聚合                            | true / false                                            | true                                                                                                                       |
 
 ## 配置说明
 
@@ -178,8 +209,9 @@ MoonTV 支持标准的苹果 CMS V10 API 格式。
 
 ## Roadmap
 
-- [ ] DB 存储
-- [ ] 深色模式
+- [x] 深色模式
+- [x] 持久化存储
+- [x] 多账户
 
 ## 安全与隐私提醒
 
